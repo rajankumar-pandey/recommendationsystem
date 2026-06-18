@@ -1,0 +1,180 @@
+import os
+import tkinter as tk
+from tkinter import messagebox
+import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import MinMaxScaler
+
+# =====================================================================
+# 1. DATA & MACHINE LEARNING BACKEND
+# =====================================================================
+# Expanded mock dataset with more tracks to make the GUI fun to use
+data = {
+    "track_name": [
+        "Walking on Sunshine",
+        "Can't Stop the Feeling",
+        "Chopin Nocturne Op. 9",
+        "Weightless (Ambient)",
+        "Heavy Metal Thunder",
+        "Master of Puppets",
+        "Rainy Day Melancholy",
+        "Fix You",
+    ],
+    "artist": [
+        "Katrina",
+        "Justin Timberlake",
+        "Classical",
+        "Marconi Union",
+        "RockBand",
+        "Metallica",
+        "LoFi Beats",
+        "Coldplay",
+    ],
+    "valence": [0.92, 0.85, 0.25, 0.35, 0.15, 0.12, 0.10, 0.22],
+    "energy": [0.88, 0.90, 0.12, 0.08, 0.95, 0.98, 0.20, 0.30],
+    "danceability": [0.85, 0.88, 0.20, 0.10, 0.40, 0.52, 0.30, 0.42],
+}
+df = pd.DataFrame(data)
+
+# Cluster the tracks using K-Means
+features = ["valence", "energy", "danceability"]
+scaler = MinMaxScaler()
+X = scaler.fit_transform(df[features])
+
+kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
+df["mood_cluster"] = kmeans.fit_predict(X)
+
+
+# Labeling moods based on features
+def map_cluster_to_mood(row):
+    if row["valence"] > 0.5 and row["energy"] > 0.5:
+        return "happy"
+    elif row["valence"] < 0.5 and row["energy"] > 0.5:
+        return "angry"
+    elif row["valence"] < 0.5 and row["energy"] < 0.5:
+        return "sad"
+    else:
+        return "calm"
+
+
+df["predicted_mood"] = df.apply(map_cluster_to_mood, axis=1)
+
+
+# =====================================================================
+# 2. TKINTER GUI DESIGN
+# =====================================================================
+class MusicRecommenderGUI:
+
+    def __init__(self, root):
+        self.root = root
+        self.root.title("VibeTune - Mood Recommender")
+        self.root.geometry("550x600")
+        self.root.configure(bg="#121212")  # Modern Dark Theme
+
+        # Title Header
+        title_label = tk.Label(
+            root,
+            text="🎵 VibeTune",
+            font=("Helvetica", 28, "bold"),
+            fg="#1DB954",
+            bg="#121212",
+        )
+        title_label.pack(pady=20)
+
+        subtitle_label = tk.Label(
+            root,
+            text="How are you feeling right now?",
+            font=("Helvetica", 14),
+            fg="#B3B3B3",
+            bg="#121212",
+        )
+        subtitle_label.pack(pady=5)
+
+        # Button Container Grid
+        btn_frame = tk.Frame(root, bg="#121212")
+        btn_frame.pack(pady=20)
+
+        # Grid styling properties for buttons
+        moods = [
+            ("☀️ Happy", "happy", "#FFD700", 0, 0),
+            ("🌧️ Sad", "sad", "#1E90FF", 0, 1),
+            ("🧘 Calm", "calm", "#98FB98", 1, 0),
+            ("🔥 Angry", "angry", "#FF4500", 1, 1),
+        ]
+
+        for text, mood_id, color, row_idx, col_idx in moods:
+            btn = tk.Button(
+                btn_frame,
+                text=text,
+                font=("Helvetica", 12, "bold"),
+                fg="#121212",
+                bg=color,
+                activebackground="#FFFFFF",
+                width=16,
+                height=2,
+                bd=0,
+                cursor="hand2",
+                command=lambda m=mood_id: self.get_recommendations(m),
+            )
+            btn.grid(row=row_idx, column=col_idx, padx=15, pady=15)
+
+        # Recommendation Results Display Area
+        results_header = tk.Label(
+            root,
+            text="Your Recommended Track List:",
+            font=("Helvetica", 12, "bold"),
+            fg="#FFFFFF",
+            bg="#121212",
+        )
+        results_header.pack(pady=(10, 5))
+
+        # Text display box with clean formatting
+        self.output_box = tk.Text(
+            root,
+            font=("Consolas", 11),
+            bg="#1E1E1E",
+            fg="#FFFFFF",
+            bd=0,
+            padx=15,
+            pady=15,
+            width=55,
+            height=10,
+        )
+        self.output_box.pack(pady=10)
+        self.output_box.insert(
+            tk.END, "Click a mood button above to discover music..."
+        )
+        self.output_box.config(state=tk.DISABLED)
+
+    def get_recommendations(self, mood):
+        # Filter dataframe for selected mood
+        recommendations = df[df["predicted_mood"] == mood]
+
+        # Enable text modifications, clear old text, insert new recommendations
+        self.output_box.config(state=tk.NORMAL)
+        self.output_box.delete("1.0", tk.END)
+
+        if not recommendations.empty:
+            header_text = (
+                f"✨ Spacial matches found for mood: '{mood.upper()}'\n"
+            )
+            border = "═" * 50 + "\n"
+            self.output_box.insert(tk.END, header_text + border)
+
+            for idx, row in recommendations.iterrows():
+                song_card = f"📌 Song:  {row['track_name']}\n   Artist: {row['artist']}\n\n"
+                self.output_box.insert(tk.END, song_card)
+        else:
+            self.output_box.insert(
+                tk.END, f"No tracks currently indexed under '{mood}' mood."
+            )
+
+        # Lock text box adjustments back down
+        self.output_box.config(state=tk.DISABLED)
+
+
+# Launch Application Window
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = MusicRecommenderGUI(root)
+    root.mainloop()
